@@ -1,0 +1,92 @@
+name: CI + SAST + Container Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build_test_scan:
+    runs-on: ubuntu-latest
+
+    # Needed to upload SARIF (Trivy) and push to GHCR (optional)
+    permissions:
+      contents: read
+      security-events: write
+      packages: write
+
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}/devsecops-intro
+      IMAGE_TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm ci --prefix app || npm install --prefix app
+
+      - name: Run tests
+        run: npm test --prefix app
+
+      # --- Trivy FS (source/deps) ---
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs.sarif'
+          severity: 'CRITICAL,HIGH'
+          # exit-code: '1'    # <- uncomment to fail on findings
+
+      - name: Upload Trivy FS SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+
+      # --- Build container image ---
+      - name: Build image
+        run: docker build -t $IMAGE_NAME:$IMAGE_TAG .
+
+      # --- Trivy Image (container) ---
+      - name: Trivy Image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          format: 'sarif'
+          output: 'trivy-image.sarif'
+          severity: 'CRITICAL,HIGH'
+          # exit-code: '1'    # <- uncomment to fail on findings
+
+      - name: Upload Trivy Image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+
+      # --- (Optional) Push to GHCR if secrets exist ---
+      - name: Log in to GHCR
+        if: ${{ secrets.GHCR_TOKEN != '' && secrets.GHCR_USERNAME != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Push image to GHCR
+        if: ${{ secrets.GHCR_TOKEN != '' && secrets.GHCR_USERNAME != '' }}
+        run: docker push $IMAGE_NAME:$IMAGE_TAG
+
+      # Helpful for evidence
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-src
+          path: app/
