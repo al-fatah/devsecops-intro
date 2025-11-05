@@ -1,0 +1,40 @@
+name: DAST - OWASP ZAP Baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  zap:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install & start app
+        run: |
+          npm ci --prefix app || npm install --prefix app
+          npm start --prefix app &
+          npx --yes wait-on http://localhost:3000/health
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: "http://localhost:3000"
+          cmd_options: "-a"   # include alpha passive rules
+          allow_issue_writing: false
+
+      - name: Upload ZAP HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: report.html
