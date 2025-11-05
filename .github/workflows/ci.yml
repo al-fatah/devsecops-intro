@@ -51,6 +51,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-fs.sarif
+          category: trivy-fs
 
       # --- Build container image ---
       - name: Build image
@@ -70,6 +71,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-image.sarif
+          category: trivy-image
 
       # Helpful for evidence
       - name: Upload build artifact
