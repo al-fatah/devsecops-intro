@@ -71,19 +71,6 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
 
-      # --- (Optional) Push to GHCR if secrets exist ---
-      - name: Log in to GHCR
-        if: ${{ secrets.GHCR_TOKEN != '' && secrets.GHCR_USERNAME != '' }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Push image to GHCR
-        if: ${{ secrets.GHCR_TOKEN != '' && secrets.GHCR_USERNAME != '' }}
-        run: docker push $IMAGE_NAME:$IMAGE_TAG
-
       # Helpful for evidence
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
